@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Inkframe — Edit your PDF, right in the browser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+:root{
+    --ink:#1B2430;
+    --ink-soft:#2B384A;
+    --paper:#FAF7F2;
+    --paper-dim:#F0EBE0;
+    --brass:#A9762C;
+    --brass-bright:#C9A15A;
+    --stamp:#B0413E;
+    --line:#DED5C2;
+    --text-light:#F3EFE4;
+    --text-dim:#B9C2CE;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    font-family:'Inter',sans-serif;
+    background:var(--paper-dim);
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  ::selection{background:var(--brass-bright); color:var(--ink);}
+
+  /* ---------- Top bar ---------- */
+  header{
+    background:var(--ink);
+    color:var(--text-light);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:0 20px;
+    height:56px;
+    flex-shrink:0;
+    border-bottom:1px solid #0000;
+    z-index:20;
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    gap:8px;
+  }
+  .brand .mark{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:20px;
+    letter-spacing:0.2px;
+  }
+  .brand .mark span{ color:var(--brass-bright); }
+  .brand .tag{
+    font-size:11px;
+    color:var(--text-dim);
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    border-left:1px solid #3a4658;
+    padding-left:8px;
+  }
+  .header-right{
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .new-file-btn{
+    display:none;
+    background:var(--brass);
+    color:var(--ink);
+    border:none;
+    padding:7px 14px;
+    border-radius:100px;
+    font-size:12.5px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:'Inter',sans-serif;
+  }
+  .new-file-btn:hover{ background:var(--brass-bright); }
+  .new-file-btn.show{ display:inline-block; }
+  .status-badge{
+    font-size:12px;
+    font-weight:600;
+    padding:6px 12px;
+    border-radius:100px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    letter-spacing:0.02em;
+  }
+  .status-badge.locked{ background:#3a2a2a; color:#e6b3ad; }
+  .status-badge.unlocked{ background:#2c3a2c; color:#bfe0b6; }
+  .status-dot{ width:7px; height:7px; border-radius:50%; background:currentColor; }
+
+  /* ---------- App layout ---------- */
+  .app{
+    flex:1;
+    display:flex;
+    min-height:0;
+  }
+
+  /* Left tool rail */
+  .rail{
+    width:84px;
+    background:var(--ink-soft);
+    border-right:1px solid #0002;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:16px 0;
+    gap:6px;
+    flex-shrink:0;
+    overflow-y:auto;
+  }
+  .rail .eyebrow{
+    font-size:9px;
+    text-transform:uppercase;
+    letter-spacing:0.12em;
+    color:var(--text-dim);
+    margin:10px 0 4px;
+    text-align:center;
+  }
+  .tool-btn{
+    width:60px;
+    height:56px;
+    border:none;
+    background:transparent;
+    color:var(--text-light);
+    border-radius:10px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    cursor:pointer;
+    font-family:inherit;
+    transition:background .15s ease;
+  }
+  .tool-btn:hover{ background:#ffffff12; }
+  .tool-btn.active{ background:var(--brass); color:var(--ink); }
+  .tool-btn .glyph{ font-size:18px; line-height:1; }
+  .tool-btn .lbl{ font-size:9.5px; letter-spacing:0.02em; }
+
+  .swatches{
+    display:flex;
+    gap:6px;
+    margin:10px 0;
+  }
+  .swatch{
+    width:20px;height:20px;border-radius:50%;
+    border:2px solid #ffffff30;
+    cursor:pointer;
+  }
+  .swatch.active{ border-color:#fff; }
+  .wheel-swatch{
+    padding:0; background:conic-gradient(red,yellow,lime,cyan,blue,magenta,red);
+    position:relative;
+  }
+  .wheel-swatch.active{ border-color:#fff; box-shadow:0 0 0 2px var(--brass-bright); }
+
+  .size-control{
+    width:100%;
+    padding:0 12px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:6px;
+  }
+  .size-control input[type="range"]{
+    width:100%;
+    accent-color: var(--brass-bright);
+  }
+  .size-preview{
+    width:100%;
+    height:30px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .size-preview span{
+    display:block;
+    border-radius:50%;
+    background:var(--text-light);
+  }
+  .size-val{ font-size:10.5px; color:var(--text-dim); }
+
+  /* Color wheel popover */
+  .wheel-popover{
+    position:fixed;
+    top:16px; left:92px;
+    width:220px;
+    background:#fff;
+    border-radius:14px;
+    box-shadow:0 10px 32px #0004;
+    padding:14px 16px 16px;
+    z-index:150;
+    display:none;
+  }
+  .wheel-popover.show{ display:block; }
+  .wheel-head{
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:12.5px; font-weight:600; color:var(--ink); margin-bottom:10px;
+  }
+  .wheel-close{
+    border:none; background:none; font-size:16px; line-height:1;
+    cursor:pointer; color:#9a9282;
+  }
+  .wheel-wrap{
+    position:relative;
+    width:180px; height:180px;
+    margin:0 auto 12px;
+  }
+  .wheel-wrap canvas{ border-radius:50%; cursor:crosshair; display:block; }
+  .wheel-cursor{
+    position:absolute;
+    width:12px; height:12px;
+    border-radius:50%;
+    border:2px solid #fff;
+    box-shadow:0 0 0 1px #0006, 0 1px 3px #0006;
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+    left:90px; top:8px;
+  }
+  .wheel-slider-lbl{ font-size:11px; color:#7a7364; display:block; margin-bottom:4px; }
+  #brightnessSlider{ width:100%; accent-color:var(--brass-bright); margin-bottom:12px; }
+  .wheel-preview-row{ display:flex; align-items:center; gap:10px; }
+  .wheel-preview{
+    width:32px; height:32px; border-radius:8px; border:1.5px solid var(--line); flex-shrink:0;
+  }
+  .hex-input{
+    flex:1;
+    border:1.5px solid var(--line);
+    border-radius:7px;
+    padding:7px 9px;
+    font-size:12.5px;
+    font-family:'Inter',sans-serif;
+    color:var(--ink);
+    text-transform:uppercase;
+  }
+
+  /* Center canvas area */
+  .stage{
+    flex:1;
+    overflow:auto;
+    padding:32px 24px 120px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:28px;
+  }
+  .dropzone{
+    width:min(560px,90%);
+    margin-top:10vh;
+    border:2px dashed #C9B98F;
+    border-radius:16px;
+    background:#fff;
+    padding:56px 40px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone:hover, .dropzone.drag{ border-color:var(--brass); background:#fffdf7; }
+  .dropzone .icon{
+    font-family:'Fraunces',serif;
+    font-size:38px;
+    color:var(--brass);
+    margin-bottom:6px;
+  }
+  .dropzone h2{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:22px;
+    margin:6px 0 8px;
+  }
+  .dropzone p{
+    font-size:13.5px;
+    color:#6b6458;
+    line-height:1.5;
+    margin:0;
+  }
+  .dropzone input{ display:none; }
+
+  .page-outer{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+  }
+  .page-toolbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:11.5px;
+    color:#7a7364;
+    letter-spacing:0.03em;
+  }
+  .page-toolbar .del-page{
+    border:1px solid var(--stamp);
+    color:var(--stamp);
+    background:#fff;
+    border-radius:6px;
+    padding:3px 9px;
+    font-size:11px;
+    cursor:pointer;
+  }
+  .page-toolbar .del-page:hover{ background:var(--stamp); color:#fff; }
+  .page-wrap{
+    position:relative;
+    background:#fff;
+    box-shadow:0 2px 4px #0001, 0 12px 28px #0002;
+    border:1px solid var(--line);
+  }
+  .page-wrap canvas{ position:absolute; top:0; left:0; }
+  .draw-canvas{ cursor:crosshair; touch-action:none; }
+  .text-layer{ position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; }
+  .text-layer > *{ pointer-events:auto; }
+
+  /* Real, selectable PDF text (invisible, sits over the rendered page image
+     so users can select/copy words like in any normal PDF viewer) */
+  .pdfTextLayer{
+    position:absolute; top:0; left:0;
+    overflow:hidden; line-height:1;
+  }
+  .pdfTextLayer span{
+    color:transparent;
+    position:absolute;
+    white-space:pre;
+    cursor:text;
+    transform-origin:0% 0%;
+  }
+  .pdfTextLayer ::selection{ background: rgba(169,118,44,.35); }
+
+  .sel-highlight-btn{
+    position:fixed; z-index:200; display:none;
+    background:var(--ink); color:var(--text-light); border:none;
+    padding:7px 12px; border-radius:7px; font-size:12px; font-weight:600;
+    cursor:pointer; font-family:'Inter',sans-serif; box-shadow:0 4px 14px #0004;
+  }
+
+  .ann-text-wrap{ position:absolute; display:inline-block; }
+  .ann-text{
+    min-width:40px;
+    padding:2px 4px;
+    border:1.5px dashed transparent;
+    font-family:'Inter',sans-serif;
+    background:transparent;
+    outline:none;
+    cursor:text;
+    white-space:pre-wrap;
+    display:inline-block;
+  }
+  .ann-text:focus, .ann-text-wrap:hover .ann-text{ border-color:var(--brass-bright); }
+
+  .ann-image{
+    position:absolute;
+    cursor:default;
+    border:1.5px dashed transparent;
+  }
+  .ann-image:hover{ border-color:var(--brass-bright); }
+  .ann-image img{ width:100%; height:100%; display:block; pointer-events:none; }
+
+  .drag-handle{
+    position:absolute;
+    top:-11px; left:-11px;
+    width:20px; height:20px;
+    background:var(--ink);
+    color:#fff;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    cursor:move;
+    opacity:0;
+    transition:opacity .12s ease;
+    z-index:5;
+  }
+  .ann-text-wrap:hover .drag-handle,
+  .ann-text:focus ~ .drag-handle,
+  .ann-image:hover .drag-handle{ opacity:1; }
+
+  .text-style-panel{ display:none; }
+  .ts-lbl{ font-size:11px; color:#7a7364; display:block; margin:12px 0 5px; }
+  .ts-lbl:first-of-type{ margin-top:0; }
+  #fontSelect{
+    width:100%; padding:8px 10px; border:1.5px solid var(--line); border-radius:8px;
+    font-family:'Inter',sans-serif; font-size:12.5px; color:var(--ink); background:#fff;
+  }
+  .ts-size-row{ display:flex; align-items:center; gap:7px; }
+  .ts-size-row input[type="number"]{
+    width:72px; padding:7px 9px; border:1.5px solid var(--line); border-radius:8px;
+    font-size:12.5px; font-family:'Inter',sans-serif; color:var(--ink);
+  }
+  .ts-size-row span{ font-size:12px; color:#7a7364; }
+  .ts-color-swatch{
+    width:34px; height:34px; border-radius:9px; border:1.5px solid var(--line);
+    cursor:pointer; padding:0;
+  }
+
+  .watermark-preview{
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    pointer-events:none;
+    overflow:hidden;
+  }
+  .watermark-preview span{
+    font-family:'Fraunces',serif;
+    font-weight:700;
+    font-size:13%;
+    font-size:34px;
+    color:var(--stamp);
+    opacity:0.16;
+    transform:rotate(-32deg);
+    white-space:nowrap;
+    letter-spacing:0.04em;
+  }
+
+  /* Right panel */
+  .side{
+    width:260px;
+    background:#fff;
+    border-left:1px solid var(--line);
+    padding:20px 18px;
+    overflow-y:auto;
+    flex-shrink:0;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .side h3{
+    font-family:'Fraunces',serif;
+    font-size:15px;
+    margin:0 0 4px;
+  }
+  .side p.hint{ font-size:12px; color:#7a7364; line-height:1.5; margin:0; }
+  .btn{
+    display:block;
+    width:100%;
+    text-align:center;
+    padding:11px 14px;
+    border-radius:9px;
+    font-weight:600;
+    font-size:13.5px;
+    cursor:pointer;
+    border:none;
+    font-family:inherit;
+  }
+  .btn-primary{ background:var(--ink); color:var(--text-light); }
+  .btn-primary:hover{ background:var(--ink-soft); }
+  .btn-outline{ background:#fff; color:var(--brass); border:1.5px solid var(--brass); }
+  .btn-outline:hover{ background:#fbf3e6; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+
+  .divider{ height:1px; background:var(--line); }
+
+  .ad-slot{
+    border:1.5px dashed #cfc6b0;
+    border-radius:10px;
+    padding:16px 10px;
+    text-align:center;
+    font-size:11px;
+    color:#9a9282;
+    line-height:1.5;
+  }
+  .ad-slot b{ display:block; color:#6b6458; font-size:12px; margin-bottom:4px; }
+
+  /* Ad modal */
+  .modal-backdrop{
+    position:fixed; inset:0; background:#1b2430cc;
+    display:none; align-items:center; justify-content:center; z-index:100;
+  }
+  .modal-backdrop.show{ display:flex; }
+  .modal{
+    background:#fff; border-radius:16px; width:min(380px,88vw);
+    padding:28px 26px; text-align:center;
+  }
+  .modal .icon{ font-family:'Fraunces',serif; font-size:30px; color:var(--brass); }
+  .modal h3{ font-family:'Fraunces',serif; margin:8px 0 6px; font-size:19px; }
+  .modal p{ font-size:13px; color:#6b6458; line-height:1.5; margin:0 0 16px; }
+  .ad-frame{
+    background:var(--ink); color:var(--text-dim); border-radius:10px;
+    height:150px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    margin-bottom:16px; gap:6px;
+  }
+  .ad-frame .count{ font-family:'Fraunces',serif; font-size:30px; color:var(--brass-bright); }
+  .ad-frame .lbl{ font-size:11px; letter-spacing:0.05em; text-transform:uppercase; }
+  .modal .actions{ display:flex; gap:10px; }
+  .modal .skip{ background:none; border:none; color:#9a9282; font-size:12px; margin-top:12px; cursor:pointer; text-decoration:underline; }
+
+  @media (max-width: 780px){
+    .side{ display:none; }
+    .rail{ width:64px; }
+    .tool-btn{ width:48px; }
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <div class="mark">Ink<span><a href="index.html">frame</span></a></div>
+    <div class="tag">PDF editor</div>
+  </div>
+  <div class="header-right">
+    <button id="newFileBtn" class="new-file-btn">Upload different PDF</button>
+    <div id="statusBadge" class="status-badge locked">
+      <span class="status-dot"></span>
+      <span id="statusText">Free · watermark on export</span>
+    </div>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- LEFT TOOL RAIL -->
+  <div class="rail">
+    <div class="eyebrow">Tools</div>
+    <button class="tool-btn active" data-tool="select" title="Click any existing word or line to edit it"><span class="glyph">&#8598;</span><span class="lbl">Select</span></button>
+    <button class="tool-btn" data-tool="text"><span class="glyph">T</span><span class="lbl">Text</span></button>
+    <button class="tool-btn" data-tool="pen"><span class="glyph">&#9998;</span><span class="lbl">Draw</span></button>
+    <button class="tool-btn" data-tool="highlight"><span class="glyph">&#9646;</span><span class="lbl">Mark</span></button>
+    <button class="tool-btn" data-tool="image"><span class="glyph">&#9635;</span><span class="lbl">Image</span></button>
+    <input type="file" id="imageInput" accept="image/png,image/jpeg" style="display:none;">
+
+    <div class="eyebrow">Ink</div>
+    <div class="swatches">
+      <div class="swatch active" data-color="#1B2430" style="background:#1B2430;"></div>
+      <div class="swatch" data-color="#FFFFFF" style="background:#FFFFFF;"></div>
+      <button id="wheelToggle" class="swatch wheel-swatch" title="Pick any color"></button>
+    </div>
+
+    <div class="eyebrow">Marker size</div>
+    <div class="size-control">
+      <input type="range" id="penSize" min="1" max="24" value="3" step="1">
+      <div class="size-preview"><span id="sizeDot"></span></div>
+      <div class="size-val" id="sizeVal">3px</div>
+    </div>
+  </div>
+
+  <!-- COLOR WHEEL POPOVER -->
+  <div class="wheel-popover" id="wheelPopover">
+    <div class="wheel-head">
+      <span>Pick a color</span>
+      <button id="wheelClose" class="wheel-close">&times;</button>
+    </div>
+    <div class="wheel-wrap">
+      <canvas id="colorWheel" width="180" height="180"></canvas>
+      <div class="wheel-cursor" id="wheelCursor"></div>
+    </div>
+    <label class="wheel-slider-lbl">Brightness</label>
+    <input type="range" id="brightnessSlider" min="0" max="100" value="100">
+    <div class="wheel-preview-row">
+      <div class="wheel-preview" id="wheelPreview"></div>
+      <input type="text" id="hexInput" class="hex-input" value="#1B2430" maxlength="7">
+    </div>
+  </div>
+
+  <!-- CENTER STAGE -->
+  <div class="stage" id="stage">
+    <div class="dropzone" id="dropzone">
+      <div class="icon">&#10063;</div>
+      <h2>Drop a PDF here</h2>
+      <p>or click to choose a file from your computer.<br>
+      It's opened and edited entirely in your browser —<br>the file is never uploaded anywhere.<br>
+      Once it's open, click any word with the <b>Select</b> tool to edit it.</p>
+      <input type="file" id="fileInput" accept="application/pdf">
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="side">
+    <div id="textStylePanel" class="text-style-panel">
+      <h3>Text style</h3>
+      <label class="ts-lbl">Font</label>
+      <select id="fontSelect"></select>
+      <label class="ts-lbl">Size</label>
+      <div class="ts-size-row">
+        <input type="number" id="fontSizeInput" min="6" max="200" value="20">
+        <span>px</span>
+      </div>
+      <label class="ts-lbl">Color</label>
+      <button id="textColorSwatch" class="ts-color-swatch" title="Change text color"></button>
+      <div class="divider" style="margin-top:16px;"></div>
+    </div>
+
+    <div>
+      <h3>Export</h3>
+      <p class="hint">Free exports include a small watermark. Remove it any time without paying — just watch a short ad.</p>
+    </div>
+    <button class="btn btn-primary" id="downloadBtn" disabled>Download PDF</button>
+    <button class="btn btn-outline" id="removeWatermarkBtn" disabled>Remove watermark (watch ad)</button>
+
+    <div class="divider"></div>
+
+    <div>
+      <h3>This document</h3>
+      <p class="hint" id="fileMeta">No file loaded yet.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="ad-slot">
+      <b>Advertisement</b>
+      Replace this block with your real AdSense &lt;ins&gt; ad unit once your account is approved.
+    </div>
+  </div>
+</div>
+
+<!-- AD MODAL -->
+<div class="modal-backdrop" id="adModal">
+  <div class="modal">
+    <div class="icon">&#9878;</div>
+    <h3>Watch a short ad</h3>
+    <p>This unlocks watermark-free downloads for the rest of this session — no payment needed.</p>
+    <div class="ad-frame">
+      <div class="count" id="adCount">5</div>
+      <div class="lbl" id="adLbl">Ad playing…</div>
+    </div>
+    <div class="actions">
+      <button class="btn btn-primary" id="adContinueBtn" disabled style="flex:1;">Claim reward</button>
+    </div>
+    <button class="skip" id="adSkipBtn">Cancel</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================================
+   INKFRAME — client-side PDF editor
+   Everything (rendering + editing + export) happens in the browser via
+   PDF.js (render) and pdf-lib (edit/export). No backend, no file upload.
+   ========================================================================= */
+
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const RENDER_SCALE = 1.5;
+const { PDFDocument, StandardFonts, rgb, degrees } = PDFLib;
+
+// Fonts offered in the text panel -- these are pdf-lib's built-in "standard
+// 14" fonts, which embed correctly in the exported PDF with no extra font
+// files to load. (Reading a user's actual installed system fonts isn't
+// something a website can reliably do -- browsers don't expose that -- so
+// this curated set is the honest, always-works alternative.)
+const FONT_OPTIONS = [
+  { id:'helv',        label:'Helvetica',           css:"'Helvetica','Arial',sans-serif",              pdf: StandardFonts.Helvetica },
+  { id:'helvBold',     label:'Helvetica Bold',      css:"'Helvetica','Arial',sans-serif", weight:'700', pdf: StandardFonts.HelveticaBold },
+  { id:'helvItalic',   label:'Helvetica Italic',    css:"'Helvetica','Arial',sans-serif", style:'italic', pdf: StandardFonts.HelveticaOblique },
+  { id:'times',        label:'Times New Roman',     css:"'Times New Roman',Times,serif",               pdf: StandardFonts.TimesRoman },
+  { id:'timesBold',    label:'Times Bold',          css:"'Times New Roman',Times,serif", weight:'700', pdf: StandardFonts.TimesRomanBold },
+  { id:'timesItalic',  label:'Times Italic',        css:"'Times New Roman',Times,serif", style:'italic', pdf: StandardFonts.TimesRomanItalic },
+  { id:'courier',      label:'Courier',             css:"'Courier New',Courier,monospace",             pdf: StandardFonts.Courier },
+  { id:'courierBold',  label:'Courier Bold',        css:"'Courier New',Courier,monospace", weight:'700', pdf: StandardFonts.CourierBold }
+];
+
+
+let originalBytes = null;   // pristine copy of the uploaded PDF, kept for export
+let pages = [];              // per-page state
+let currentTool = 'select';
+let currentColor = '#1B2430';
+let unlocked = false;        // watermark-free unlock for this session
+let pendingImage = null;     // {dataUrl, w, h} waiting to be placed
+
+const stage = document.getElementById('stage');
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const imageInput = document.getElementById('imageInput');
+const downloadBtn = document.getElementById('downloadBtn');
+const removeWatermarkBtn = document.getElementById('removeWatermarkBtn');
+const statusBadge = document.getElementById('statusBadge');
+const statusText = document.getElementById('statusText');
+const fileMeta = document.getElementById('fileMeta');
+const adModal = document.getElementById('adModal');
+const adCount = document.getElementById('adCount');
+const adLbl = document.getElementById('adLbl');
+const adContinueBtn = document.getElementById('adContinueBtn');
+const adSkipBtn = document.getElementById('adSkipBtn');
+
+/* ---------------- Tool + color selection ---------------- */
+document.querySelectorAll('.tool-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTool = btn.dataset.tool;
+    if(currentTool === 'image'){ imageInput.click(); }
+    applyToolInteractivity();
+  });
+});
+document.querySelectorAll('.swatch[data-color]').forEach(sw=>{
+  sw.addEventListener('click', ()=>{
+    document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+    sw.classList.add('active');
+    currentColor = sw.dataset.color;
+    syncWheelUiToColor(currentColor);
+  });
+});
+
+/* ---------------- Marker (pen) size ---------------- */
+let currentPenWidth = 3;
+const penSizeInput = document.getElementById('penSize');
+const sizeDot = document.getElementById('sizeDot');
+const sizeVal = document.getElementById('sizeVal');
+function updateSizePreview(){
+  const v = parseInt(penSizeInput.value, 10);
+  currentPenWidth = v;
+  sizeVal.textContent = v + 'px';
+  const d = Math.max(4, Math.min(24, v));
+  sizeDot.style.width = d + 'px';
+  sizeDot.style.height = d + 'px';
+}
+penSizeInput.addEventListener('input', updateSizePreview);
+updateSizePreview();
+
+/* ---------------- Color wheel picker ---------------- */
+const wheelPopover = document.getElementById('wheelPopover');
+const wheelToggle = document.getElementById('wheelToggle');
+const colorWheelCanvas = document.getElementById('colorWheel');
+const wheelCursor = document.getElementById('wheelCursor');
+const brightnessSlider = document.getElementById('brightnessSlider');
+const wheelPreview = document.getElementById('wheelPreview');
+const hexInput = document.getElementById('hexInput');
+
+let wheelBaseColor = hexToRgbObj(currentColor);
+
+function drawColorWheel(){
+  const ctx = colorWheelCanvas.getContext('2d');
+  const w = colorWheelCanvas.width, h = colorWheelCanvas.height;
+  const cx = w/2, cy = h/2, r = w/2;
+  ctx.clearRect(0,0,w,h);
+  const conic = ctx.createConicGradient(0, cx, cy);
+  for(let i=0;i<=360;i+=10){ conic.addColorStop(i/360, `hsl(${i},100%,50%)`); }
+  ctx.fillStyle = conic;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  const radial = ctx.createRadialGradient(cx,cy,0,cx,cy,r);
+  radial.addColorStop(0,'rgba(255,255,255,1)');
+  radial.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle = radial;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+}
+drawColorWheel();
+
+function hexToRgbObj(hex){
+  const v = parseInt(hex.replace('#',''),16);
+  return { r:(v>>16)&255, g:(v>>8)&255, b:v&255 };
+}
+function rgbToHex(r,g,b){
+  return '#' + [r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+
+function pickFromWheel(e){
+  const rect = colorWheelCanvas.getBoundingClientRect();
+  let x = (e.clientX - rect.left) * (colorWheelCanvas.width / rect.width);
+  let y = (e.clientY - rect.top) * (colorWheelCanvas.height / rect.height);
+  const cx = colorWheelCanvas.width/2, cy = colorWheelCanvas.height/2, r = colorWheelCanvas.width/2 - 1;
+  let dx = x - cx, dy = y - cy;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  if(dist > r){ const ang = Math.atan2(dy,dx); dx = Math.cos(ang)*r; dy = Math.sin(ang)*r; x = cx+dx; y = cy+dy; }
+  const ctx = colorWheelCanvas.getContext('2d');
+  const px = Math.max(0, Math.min(colorWheelCanvas.width-1, Math.round(x)));
+  const py = Math.max(0, Math.min(colorWheelCanvas.height-1, Math.round(y)));
+  const d = ctx.getImageData(px,py,1,1).data;
+  wheelBaseColor = { r:d[0], g:d[1], b:d[2] };
+  wheelCursor.style.left = x + 'px';
+  wheelCursor.style.top = y + 'px';
+  applyColorFromWheel();
+}
+
+function applyColorFromWheel(){
+  const b = parseInt(brightnessSlider.value,10) / 100;
+  const hex = rgbToHex(
+    Math.round(wheelBaseColor.r * b),
+    Math.round(wheelBaseColor.g * b),
+    Math.round(wheelBaseColor.b * b)
+  );
+  hexInput.value = hex;
+  wheelPreview.style.background = hex;
+
+  if(colorTarget === 'text' && activeTextRecord){
+    activeTextRecord.color = hex;
+    activeTextRecord.textEl.style.color = hex;
+    textColorSwatch.style.background = hex;
+  } else {
+    currentColor = hex;
+    document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+    wheelToggle.classList.add('active');
+  }
+}
+
+function syncWheelUiToColor(hex){
+  wheelBaseColor = hexToRgbObj(hex);
+  brightnessSlider.value = 100;
+  hexInput.value = hex;
+  wheelPreview.style.background = hex;
+}
+syncWheelUiToColor(currentColor);
+
+let wheelDragging = false;
+colorWheelCanvas.addEventListener('pointerdown', e=>{ wheelDragging = true; pickFromWheel(e); colorWheelCanvas.setPointerCapture(e.pointerId); });
+colorWheelCanvas.addEventListener('pointermove', e=>{ if(wheelDragging) pickFromWheel(e); });
+colorWheelCanvas.addEventListener('pointerup', ()=> wheelDragging = false);
+brightnessSlider.addEventListener('input', applyColorFromWheel);
+
+hexInput.addEventListener('change', ()=>{
+  let v = hexInput.value.trim();
+  if(v[0] !== '#') v = '#' + v;
+  if(/^#[0-9A-Fa-f]{6}$/.test(v)){
+    syncWheelUiToColor(v);
+    if(colorTarget === 'text' && activeTextRecord){
+      activeTextRecord.color = v;
+      activeTextRecord.textEl.style.color = v;
+      textColorSwatch.style.background = v;
+    } else {
+      currentColor = v;
+      document.querySelectorAll('.swatch').forEach(s=>s.classList.remove('active'));
+      wheelToggle.classList.add('active');
+    }
+  } else {
+    hexInput.value = colorTarget === 'text' && activeTextRecord ? activeTextRecord.color : currentColor;
+  }
+});
+
+let colorTarget = 'global'; // 'global' (Ink rail) or 'text' (the focused text box)
+
+wheelToggle.addEventListener('click', e=>{
+  e.stopPropagation();
+  colorTarget = 'global';
+  syncWheelUiToColor(currentColor);
+  const r = wheelToggle.getBoundingClientRect();
+  wheelPopover.style.left = Math.min(window.innerWidth - 250, r.right + 10) + 'px';
+  wheelPopover.style.top = Math.max(8, r.top - 40) + 'px';
+  wheelPopover.classList.toggle('show');
+});
+document.getElementById('wheelClose').addEventListener('click', ()=> wheelPopover.classList.remove('show'));
+document.addEventListener('click', e=>{
+  if(wheelPopover.classList.contains('show') && !wheelPopover.contains(e.target) && e.target !== wheelToggle && e.target !== textColorSwatch){
+    wheelPopover.classList.remove('show');
+  }
+});
+
+/* ---------------- Text style panel (font, size, color) ---------------- */
+let activeTextRecord = null;
+const textStylePanel = document.getElementById('textStylePanel');
+const fontSelectEl = document.getElementById('fontSelect');
+const fontSizeInputEl = document.getElementById('fontSizeInput');
+const textColorSwatch = document.getElementById('textColorSwatch');
+
+FONT_OPTIONS.forEach(f=>{
+  const o = document.createElement('option');
+  o.value = f.id; o.textContent = f.label;
+  fontSelectEl.appendChild(o);
+});
+
+function showTextStylePanel(record){
+  textStylePanel.style.display = 'block';
+  fontSelectEl.value = record.fontId;
+  fontSizeInputEl.value = record.fontSize;
+  textColorSwatch.style.background = record.color;
+}
+
+fontSelectEl.addEventListener('change', ()=>{
+  if(!activeTextRecord) return;
+  const opt = FONT_OPTIONS.find(f=>f.id === fontSelectEl.value);
+  activeTextRecord.fontId = opt.id;
+  activeTextRecord.textEl.style.fontFamily = opt.css;
+  activeTextRecord.textEl.style.fontWeight = opt.weight || '400';
+  activeTextRecord.textEl.style.fontStyle = opt.style || 'normal';
+});
+
+fontSizeInputEl.addEventListener('input', ()=>{
+  if(!activeTextRecord) return;
+  const v = Math.max(6, Math.min(200, parseInt(fontSizeInputEl.value,10) || 20));
+  activeTextRecord.fontSize = v;
+  activeTextRecord.textEl.style.fontSize = v + 'px';
+});
+
+textColorSwatch.addEventListener('click', e=>{
+  e.stopPropagation();
+  if(!activeTextRecord) return;
+  colorTarget = 'text';
+  syncWheelUiToColor(activeTextRecord.color);
+  const r = textColorSwatch.getBoundingClientRect();
+  wheelPopover.style.left = Math.max(8, r.left - 230) + 'px';
+  wheelPopover.style.top = Math.max(8, r.top - 60) + 'px';
+  wheelPopover.classList.add('show');
+});
+
+document.addEventListener('click', e=>{
+  if(!activeTextRecord) return;
+  const withinPanel = textStylePanel.contains(e.target);
+  const withinText = activeTextRecord.el.contains(e.target) || e.target === activeTextRecord.el;
+  const withinWheel = wheelPopover.contains(e.target) || e.target === wheelToggle;
+  if(!withinPanel && !withinText && !withinWheel){
+    activeTextRecord = null;
+    textStylePanel.style.display = 'none';
+  }
+});
+
+/* ---------------- File loading ---------------- */
+dropzone.addEventListener('click', ()=> fileInput.click());
+['dragenter','dragover'].forEach(evt=>
+  dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(evt=>
+  dropzone.addEventListener(evt, e=>{ e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0];
+  if(f && f.type === 'application/pdf') loadFile(f);
+});
+fileInput.addEventListener('change', e=>{
+  if(e.target.files[0]) loadFile(e.target.files[0]);
+});
+
+const newFileBtn = document.getElementById('newFileBtn');
+newFileBtn.addEventListener('click', ()=> fileInput.click());
+
+function resetAppStateForNewFile(){
+  unlocked = false;
+  updateStatusBadge();
+  activeTextRecord = null;
+  textStylePanel.style.display = 'none';
+  wheelPopover.classList.remove('show');
+  pendingImage = null;
+  document.querySelectorAll('.tool-btn').forEach(b=>b.classList.remove('active'));
+  const selectBtn2 = document.querySelector('.tool-btn[data-tool="select"]');
+  if(selectBtn2) selectBtn2.classList.add('active');
+  currentTool = 'select';
+}
+
+function loadFile(file){
+  const reader = new FileReader();
+  reader.onload = async ()=>{
+    resetAppStateForNewFile();
+    originalBytes = reader.result;
+    fileMeta.textContent = `${file.name} · ${(file.size/1024).toFixed(0)} KB`;
+    downloadBtn.disabled = false;
+    removeWatermarkBtn.disabled = false;
+    newFileBtn.classList.add('show');
+    await renderPdf(originalBytes.slice(0));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function renderPdf(arrayBuffer){
+  stage.innerHTML = '';
+  pages = [];
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+  for(let i=1;i<=pdf.numPages;i++){
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: RENDER_SCALE });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+
+    // Real, invisible, selectable text layer -- this is what lets you
+    // click-drag to select and copy words, same as any normal PDF viewer.
+    const pdfTextLayerEl = document.createElement('div');
+    pdfTextLayerEl.className = 'pdfTextLayer';
+    pdfTextLayerEl.style.width = viewport.width + 'px';
+    pdfTextLayerEl.style.height = viewport.height + 'px';
+    const textContent = await page.getTextContent();
+    await pdfjsLib.renderTextLayer({
+      textContentSource: textContent,
+      container: pdfTextLayerEl,
+      viewport,
+      textDivs: []
+    }).promise;
+
+    const drawCanvas = document.createElement('canvas');
+    drawCanvas.width = viewport.width; drawCanvas.height = viewport.height;
+    drawCanvas.className = 'draw-canvas';
+
+    const textLayer = document.createElement('div');
+    textLayer.className = 'text-layer';
+
+    const wmPreview = document.createElement('div');
+    wmPreview.className = 'watermark-preview';
+    wmPreview.innerHTML = '<span>INKFRAME · FREE VERSION</span>';
+    wmPreview.style.display = unlocked ? 'none' : 'flex';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'page-wrap';
+    wrap.style.width = viewport.width + 'px';
+    wrap.style.height = viewport.height + 'px';
+    wrap.append(canvas, pdfTextLayerEl, drawCanvas, textLayer, wmPreview);
+
+    const toolbar = document.createElement('div');
+    toolbar.className = 'page-toolbar';
+    toolbar.innerHTML = `<span>Page ${i}</span>`;
+    const delBtn = document.createElement('button');
+    delBtn.className = 'del-page';
+    delBtn.textContent = 'Delete page';
+    const pageIndex = i - 1;
+    delBtn.addEventListener('click', ()=> deletePage(pageIndex));
+    toolbar.appendChild(delBtn);
+
+    const outer = document.createElement('div');
+    outer.className = 'page-outer';
+    outer.append(toolbar, wrap);
+    stage.appendChild(outer);
+
+    const pageState = {
+      index: pageIndex,
+      outer, wrap, canvas, drawCanvas,
+      drawCtx: drawCanvas.getContext('2d'),
+      textLayer, wmPreview, pdfTextLayerEl,
+      scale: RENDER_SCALE,
+      texts: [], highlights: [], strokes: [], images: [], covers: [],
+      deleted: false
+    };
+    pdfTextLayerEl._pageState = pageState;
+    pages.push(pageState);
+    wireCanvasEvents(pageState);
+    wireTextLayerClick(pageState);
+    wireExistingTextEditing(pageState);
+  }
+  applyToolInteractivity();
+}
+
+/* ---------------- Which layer receives clicks, per tool ----------------
+   Three stacked layers sit over every page: the invisible selectable PDF
+   text, the drawing canvas (pen/highlight), and the annotation layer
+   (text boxes/images). Only one should intercept the pointer at a time --
+   otherwise whichever sits on top silently swallows every click. */
+function applyToolInteractivity(){
+  pages.forEach(p=>{
+    if(currentTool === 'select'){
+      p.drawCanvas.style.pointerEvents = 'none';
+      p.textLayer.style.pointerEvents = 'none';
+      p.pdfTextLayerEl.style.pointerEvents = 'auto';
+    } else if(currentTool === 'pen' || currentTool === 'highlight'){
+      p.drawCanvas.style.pointerEvents = 'auto';
+      p.textLayer.style.pointerEvents = 'none';
+      p.pdfTextLayerEl.style.pointerEvents = 'none';
+    } else { // text, image
+      p.drawCanvas.style.pointerEvents = 'none';
+      p.textLayer.style.pointerEvents = 'auto';
+      p.pdfTextLayerEl.style.pointerEvents = 'none';
+    }
+  });
+}
+
+/* ---------------- Click existing text to edit it in place ----------------
+   pdf.js's text layer gives each line/text-run its own invisible <span>
+   positioned exactly over the rendered glyphs. Clicking one (with the
+   Select tool, as a plain click rather than a drag-selection) covers the
+   original glyphs with a paper-colored patch and drops an editable text
+   box in the same spot, at the same size, pre-filled with the original
+   words -- so it reads as "editing the text" rather than adding new text. */
+function wireExistingTextEditing(p){
+  p.pdfTextLayerEl.querySelectorAll('span').forEach(span=>{
+    if(!span.textContent || !span.textContent.trim()) return;
+    span.addEventListener('click', e=>{
+      if(currentTool !== 'select') return;
+      if(span.dataset.edited === '1') return;
+      const sel = window.getSelection();
+      if(sel && !sel.isCollapsed) return; // was a drag-selection, not a click
+      e.stopPropagation();
+      beginTextEdit(p, span);
+    });
+  });
+}
+
+function beginTextEdit(p, span){
+  const wrapRect = p.wrap.getBoundingClientRect();
+  const r = span.getBoundingClientRect();
+  const x = r.left - wrapRect.left;
+  const y = r.top - wrapRect.top;
+  const w = r.width;
+  const h = r.height;
+  const fontSizePx = parseFloat(getComputedStyle(span).fontSize) || 16;
+  const originalText = span.textContent;
+
+  // Hide the original glyphs and stop this span from re-opening edit mode
+  p.covers.push({ x: x - 1, y: y - 1, w: w + 2, h: h + 2 });
+  redrawOverlay(p);
+  span.dataset.edited = '1';
+  span.style.pointerEvents = 'none';
+
+  addTextAnnotation(p, x, y - fontSizePx * 0.12, {
+    text: originalText,
+    fontSize: fontSizePx,
+    color: '#1B2430'
+  });
+}
+
+function placeCaretAtEnd(el){
+  el.focus();
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/* ---------------- Deleting pages ---------------- */
+function deletePage(idx){
+  const p = pages.find(pg => pg.index === idx);
+  if(!p) return;
+  if(pages.filter(pg=>!pg.deleted).length <= 1){
+    alert("A PDF needs at least one page — can't delete the last remaining page.");
+    return;
+  }
+  p.deleted = true;
+  p.outer.style.display = 'none';
+}
+
+/* ---------------- Drawing (pen + highlight) ---------------- */
+function getPos(evt, canvas){
+  const r = canvas.getBoundingClientRect();
+  return { x: (evt.clientX - r.left) * (canvas.width / r.width),
+           y: (evt.clientY - r.top) * (canvas.height / r.height) };
+}
+
+function redrawOverlay(p){
+  const ctx = p.drawCtx;
+  ctx.clearRect(0,0,p.drawCanvas.width,p.drawCanvas.height);
+  ctx.fillStyle = '#ffffff';
+  p.covers.forEach(c=> ctx.fillRect(c.x, c.y, c.w, c.h));
+  p.highlights.forEach(h=>{
+    ctx.fillStyle = hexToRgba('#F5C842', 0.38);
+    ctx.fillRect(h.x, h.y, h.w, h.h);
+  });
+  p.strokes.forEach(s=>{
+    ctx.strokeStyle = s.color; ctx.lineWidth = s.width;
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    ctx.beginPath();
+    s.points.forEach((pt,i)=> i===0 ? ctx.moveTo(pt.x,pt.y) : ctx.lineTo(pt.x,pt.y));
+    ctx.stroke();
+  });
+}
+function hexToRgba(hex, a){
+  const v = parseInt(hex.slice(1),16);
+  return `rgba(${(v>>16)&255},${(v>>8)&255},${v&255},${a})`;
+}
+
+function wireCanvasEvents(p){
+  let drawing = false, start = null, currentStroke = null;
+
+  p.drawCanvas.addEventListener('pointerdown', e=>{
+    if(currentTool !== 'pen' && currentTool !== 'highlight') return;
+    drawing = true;
+    start = getPos(e, p.drawCanvas);
+    if(currentTool === 'pen'){ currentStroke = { points:[start], color: currentColor, width: currentPenWidth }; }
+    p.drawCanvas.setPointerCapture(e.pointerId);
+  });
+
+  p.drawCanvas.addEventListener('pointermove', e=>{
+    if(!drawing) return;
+    const pos = getPos(e, p.drawCanvas);
+    if(currentTool === 'pen'){
+      currentStroke.points.push(pos);
+      redrawOverlay(p);
+      p.drawCtx.strokeStyle = currentStroke.color;
+      p.drawCtx.lineWidth = currentStroke.width;
+      p.drawCtx.lineJoin='round'; p.drawCtx.lineCap='round';
+      p.drawCtx.beginPath();
+      currentStroke.points.forEach((pt,i)=> i===0 ? p.drawCtx.moveTo(pt.x,pt.y) : p.drawCtx.lineTo(pt.x,pt.y));
+      p.drawCtx.stroke();
+    } else if(currentTool === 'highlight'){
+      redrawOverlay(p);
+      const x = Math.min(start.x,pos.x), y = Math.min(start.y,pos.y);
+      const w = Math.abs(pos.x-start.x), h = Math.abs(pos.y-start.y);
+      p.drawCtx.fillStyle = hexToRgba('#F5C842',0.38);
+      p.drawCtx.fillRect(x,y,w,h);
+    }
+  });
+
+  p.drawCanvas.addEventListener('pointerup', e=>{
+    if(!drawing) return;
+    drawing = false;
+    if(currentTool === 'pen'){
+      p.strokes.push(currentStroke);
+    } else if(currentTool === 'highlight'){
+      const pos = getPos(e, p.drawCanvas);
+      const x = Math.min(start.x,pos.x), y = Math.min(start.y,pos.y);
+      const w = Math.abs(pos.x-start.x), h = Math.abs(pos.y-start.y);
+      if(w > 3 && h > 3) p.highlights.push({x,y,w,h});
+      redrawOverlay(p);
+    }
+  });
+}
+
+/* ---------------- Text + image placement ---------------- */
+const MOVE_HANDLE_SVG = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 9 2 12 5 15"></polyline><polyline points="9 5 12 2 15 5"></polyline><polyline points="15 19 12 22 9 19"></polyline><polyline points="19 9 22 12 19 15"></polyline><line x1="2" y1="12" x2="22" y2="12"></line><line x1="12" y1="2" x2="12" y2="22"></line></svg>';
+
+function makeMoveHandle(){
+  const handle = document.createElement('div');
+  handle.className = 'drag-handle';
+  handle.contentEditable = 'false';
+  handle.innerHTML = MOVE_HANDLE_SVG;
+  return handle;
+}
+
+// Dragging lives on this small handle, not the annotation itself -- that
+// way text stays freely movable anywhere on the page no matter which tool
+// is currently active, while clicking the text itself still just places
+// a text cursor for editing instead of accidentally moving it.
+function makeDraggableViaHandle(el, handle, p){
+  let dragging = false, startX = 0, startY = 0, elStartX = 0, elStartY = 0;
+  handle.addEventListener('pointerdown', e=>{
+    dragging = true;
+    startX = e.clientX; startY = e.clientY;
+    elStartX = parseFloat(el.style.left) || 0;
+    elStartY = parseFloat(el.style.top) || 0;
+    handle.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    e.stopPropagation();
+  });
+  handle.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const wrapRect = p.wrap.getBoundingClientRect();
+    const scaleX = p.canvas.width / wrapRect.width;
+    const scaleY = p.canvas.height / wrapRect.height;
+    const dx = (e.clientX - startX) * scaleX;
+    const dy = (e.clientY - startY) * scaleY;
+    el.style.left = (elStartX + dx) + 'px';
+    el.style.top = (elStartY + dy) + 'px';
+  });
+  handle.addEventListener('pointerup', ()=> dragging = false);
+}
+
+function wireTextLayerClick(p){
+  p.textLayer.addEventListener('click', e=>{
+    if(e.target !== p.textLayer) return; // ignore clicks on existing annotations
+    const rectEl = p.wrap.getBoundingClientRect();
+    const x = (e.clientX - rectEl.left) * (p.canvas.width / rectEl.width);
+    const y = (e.clientY - rectEl.top) * (p.canvas.height / rectEl.height);
+
+    if(currentTool === 'text'){
+      addTextAnnotation(p, x, y);
+    } else if(currentTool === 'image' && pendingImage){
+      addImageAnnotation(p, x, y);
+    }
+  });
+}
+
+function addTextAnnotation(p, x, y, opts){
+  opts = opts || {};
+  const isEdit = opts.text !== undefined;
+  const fontSize = opts.fontSize || 20;
+  const fontId = opts.fontId || 'helv';
+  const fontOpt = FONT_OPTIONS.find(f=>f.id === fontId) || FONT_OPTIONS[0];
+  const color = opts.color || currentColor;
+
+  // Wrapper holds position (and the drag handle); the text box inside it
+  // stays a plain, uninterrupted contentEditable with nothing foreign
+  // inside it, so typing always behaves normally.
+  const wrap = document.createElement('div');
+  wrap.className = 'ann-text-wrap';
+  wrap.style.left = x + 'px';
+  wrap.style.top = y + 'px';
+
+  const textEl = document.createElement('div');
+  textEl.className = 'ann-text';
+  textEl.contentEditable = 'true';
+  textEl.style.fontSize = fontSize + 'px';
+  textEl.style.color = color;
+  textEl.style.fontFamily = fontOpt.css;
+  textEl.style.fontWeight = fontOpt.weight || '400';
+  textEl.style.fontStyle = fontOpt.style || 'normal';
+  textEl.dataset.placeholder = isEdit ? '0' : '1';
+  textEl.textContent = isEdit ? opts.text : 'Type here';
+
+  const handle = makeMoveHandle();
+  wrap.append(textEl, handle);
+  p.textLayer.appendChild(wrap);
+  makeDraggableViaHandle(wrap, handle, p);
+
+  const record = { el: wrap, textEl, fontSize, color, fontId };
+
+  textEl.addEventListener('focus', ()=>{
+    if(textEl.dataset.placeholder === '1'){
+      textEl.textContent = '';
+      textEl.dataset.placeholder = '0';
+    }
+    activeTextRecord = record;
+    showTextStylePanel(record);
+  });
+
+  setTimeout(()=>{ placeCaretAtEnd(textEl); }, 0);
+
+  p.texts.push(record);
+  return record;
+}
+
+function addImageAnnotation(p, x, y){
+  const w = pendingImage.w, h = pendingImage.h;
+  const el = document.createElement('div');
+  el.className = 'ann-image';
+  el.style.left = (x - w/2) + 'px';
+  el.style.top = (y - h/2) + 'px';
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  const img = document.createElement('img');
+  img.src = pendingImage.dataUrl;
+  el.appendChild(img);
+
+  const handle = makeMoveHandle();
+  el.appendChild(handle);
+  p.textLayer.appendChild(el);
+  makeDraggableViaHandle(el, handle, p);
+
+  p.images.push({ el, dataUrl: pendingImage.dataUrl, w, h });
+  pendingImage = null;
+}
+
+imageInput.addEventListener('change', e=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const maxW = 180;
+      const ratio = img.height / img.width;
+      pendingImage = { dataUrl: reader.result, w: maxW, h: Math.round(maxW * ratio) };
+    };
+    img.src = reader.result;
+  };
+  reader.readAsDataURL(file);
+  imageInput.value = '';
+});
+
+/* ---------------- Export ---------------- */
+async function buildPdf(applyWatermark){
+  const pdfDoc = await PDFDocument.load(originalBytes.slice(0));
+  const fontCache = {};
+  for(const f of FONT_OPTIONS){ fontCache[f.id] = await pdfDoc.embedFont(f.pdf); }
+  const pdfPages = pdfDoc.getPages();
+  const imageCache = new Map();
+
+  for(const p of pages){
+    const pageIdx = p.index;
+    if(pageIdx >= pdfPages.length) continue;
+    const pdfPage = pdfPages[pageIdx];
+    const { height } = pdfPage.getSize();
+    const s = p.scale;
+
+    // covers -- painted first so they sit underneath the replacement text,
+    // masking whatever original PDF text/glyphs were in that spot
+    for(const c of p.covers){
+      pdfPage.drawRectangle({
+        x: c.x / s,
+        y: height - (c.y + c.h) / s,
+        width: c.w / s,
+        height: c.h / s,
+        color: rgb(1, 1, 1),
+        opacity: 1
+      });
+    }
+
+    // text
+    for(const t of p.texts){
+      const text = t.textEl.textContent.trim();
+      if(!text) continue;
+      const left = parseFloat(t.el.style.left) || 0;
+      const top = parseFloat(t.el.style.top) || 0;
+      const rgbColor = hexToRgbTuple(t.color);
+      const font = fontCache[t.fontId] || fontCache['helv'];
+      const size = t.fontSize / s;
+      const ascent = font.heightAtSize(size, { descender: false });
+      pdfPage.drawText(text, {
+        x: left / s,
+        y: height - (top / s) - ascent,
+        size,
+        font,
+        color: rgb(rgbColor[0], rgbColor[1], rgbColor[2])
+      });
+    }
+
+    // highlights
+    for(const h of p.highlights){
+      pdfPage.drawRectangle({
+        x: h.x / s,
+        y: height - (h.y + h.h) / s,
+        width: h.w / s,
+        height: h.h / s,
+        color: rgb(0.96, 0.78, 0.26),
+        opacity: 0.38
+      });
+    }
+
+    // pen strokes
+    for(const stroke of p.strokes){
+      const rgbColor = hexToRgbTuple(stroke.color);
+      for(let i=0;i<stroke.points.length-1;i++){
+        const a = stroke.points[i], b = stroke.points[i+1];
+        pdfPage.drawLine({
+          start: { x: a.x / s, y: height - a.y / s },
+          end:   { x: b.x / s, y: height - b.y / s },
+          thickness: stroke.width / s,
+          color: rgb(rgbColor[0], rgbColor[1], rgbColor[2])
+        });
+      }
+    }
+
+    // images
+    for(const im of p.images){
+      let embedded = imageCache.get(im.dataUrl);
+      if(!embedded){
+        const bytes = dataUrlToUint8(im.dataUrl);
+        embedded = im.dataUrl.includes('image/png')
+          ? await pdfDoc.embedPng(bytes)
+          : await pdfDoc.embedJpg(bytes);
+        imageCache.set(im.dataUrl, embedded);
+      }
+      const left = parseFloat(im.el.style.left) || 0;
+      const top = parseFloat(im.el.style.top) || 0;
+      pdfPage.drawImage(embedded, {
+        x: left / s,
+        y: height - (top + im.h) / s,
+        width: im.w / s,
+        height: im.h / s
+      });
+    }
+
+    // watermark
+    if(applyWatermark){
+      pdfPage.drawText('INKFRAME * FREE VERSION', {
+        x: pdfPage.getSize().width/2 - 170,
+        y: height/2,
+        size: 26,
+        font: fontCache['helvBold'],
+        color: rgb(0.69, 0.25, 0.24),
+        opacity: 0.3,
+        rotate: degrees(35)
+      });
+    }
+  }
+
+  // remove deleted pages, highest index first so indices stay valid
+  const toRemove = pages.filter(p=>p.deleted).map(p=>p.index).sort((a,b)=>b-a);
+  toRemove.forEach(idx=>{ if(idx < pdfDoc.getPageCount()) pdfDoc.removePage(idx); });
+
+  return await pdfDoc.save();
+}
+
+function hexToRgbTuple(hex){
+  const v = parseInt(hex.replace('#',''),16);
+  return [((v>>16)&255)/255, ((v>>8)&255)/255, (v&255)/255];
+}
+function dataUrlToUint8(dataUrl){
+  const base64 = dataUrl.split(',')[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for(let i=0;i<binary.length;i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+async function exportAndDownload(applyWatermark){
+  const bytes = await buildPdf(applyWatermark);
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = applyWatermark ? 'edited-inkframe-free.pdf' : 'edited-inkframe.pdf';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+downloadBtn.addEventListener('click', ()=>{
+  if(!originalBytes) return;
+  exportAndDownload(!unlocked);
+});
+
+/* ---------------- Watch-ad-to-unlock flow ----------------
+   This is a SIMULATED rewarded ad (a countdown) so the prototype works
+   without a live AdSense account. To go live, replace startSimulatedAd()
+   with a real call to Google's Ad Placement API, e.g.:
+
+     adConfig({ preloadAdBreaks: 'on', sound: 'on' });
+     adBreak({
+       type: 'reward',
+       name: 'remove-watermark',
+       beforeReward: (showAdFn) => { showAdFn(); },
+       adViewed: () => { unlocked = true; updateStatusBadge(); exportAndDownload(false); },
+       adDismissed: () => { }  // no reward if the ad was skipped
+     });
+
+   Note: Google's Ad Placement API is officially scoped to games/interactive
+   media, so check current AdSense eligibility for non-game rewarded ads
+   before relying on it — some publishers instead use a rewarded unit from
+   Google Ad Manager (larger accounts) or a normal in-page video ad shown
+   inside this same modal as a "watch to unlock" placement.
+------------------------------------------------------------- */
+removeWatermarkBtn.addEventListener('click', ()=>{
+  if(unlocked){ exportAndDownload(false); return; }
+  adModal.classList.add('show');
+  startSimulatedAd();
+});
+adSkipBtn.addEventListener('click', ()=> adModal.classList.remove('show'));
+adContinueBtn.addEventListener('click', ()=>{
+  unlocked = true;
+  updateStatusBadge();
+  pages.forEach(p=> p.wmPreview.style.display = 'none');
+  adModal.classList.remove('show');
+  exportAndDownload(false);
+});
+
+function startSimulatedAd(){
+  let t = 5;
+  adCount.textContent = t;
+  adLbl.textContent = 'Ad playing…';
+  adContinueBtn.disabled = true;
+  const timer = setInterval(()=>{
+    t--;
+    if(t <= 0){
+      clearInterval(timer);
+      adCount.textContent = '✓';
+      adLbl.textContent = 'Reward ready';
+      adContinueBtn.disabled = false;
+    } else {
+      adCount.textContent = t;
+    }
+  }, 1000);
+}
+
+/* ---------------- Select real PDF text -> Highlight it ---------------- */
+const selBtn = document.createElement('button');
+selBtn.className = 'sel-highlight-btn';
+selBtn.textContent = 'Highlight selection';
+document.body.appendChild(selBtn);
+
+document.addEventListener('selectionchange', ()=>{
+  const sel = window.getSelection();
+  if(!sel || sel.isCollapsed || sel.rangeCount === 0){ selBtn.style.display = 'none'; return; }
+  const range = sel.getRangeAt(0);
+  const node = range.commonAncestorContainer;
+  const el = node.nodeType === 3 ? node.parentElement : node;
+  const layer = el && el.closest ? el.closest('.pdfTextLayer') : null;
+  if(!layer){ selBtn.style.display = 'none'; return; }
+  const rect = range.getBoundingClientRect();
+  if(rect.width === 0 && rect.height === 0){ selBtn.style.display = 'none'; return; }
+  selBtn.style.left = Math.max(8, rect.left + rect.width / 2 - 70) + 'px';
+  selBtn.style.top = Math.max(8, rect.top - 38) + 'px';
+  selBtn.style.display = 'block';
+  selBtn._range = range.cloneRange();
+  selBtn._layer = layer;
+});
+
+selBtn.addEventListener('mousedown', e=> e.preventDefault()); // don't steal the text selection
+selBtn.addEventListener('click', ()=>{
+  const range = selBtn._range, layer = selBtn._layer;
+  if(!range || !layer) return;
+  const p = layer._pageState;
+  const wrapRect = p.wrap.getBoundingClientRect();
+  const scaleX = p.canvas.width / wrapRect.width;
+  const scaleY = p.canvas.height / wrapRect.height;
+  Array.from(range.getClientRects()).forEach(r=>{
+    p.highlights.push({
+      x: (r.left - wrapRect.left) * scaleX,
+      y: (r.top - wrapRect.top) * scaleY,
+      w: r.width * scaleX,
+      h: r.height * scaleY
+    });
+  });
+  redrawOverlay(p);
+  window.getSelection().removeAllRanges();
+  selBtn.style.display = 'none';
+});
+
+function updateStatusBadge(){
+  if(unlocked){
+    statusBadge.className = 'status-badge unlocked';
+    statusText.textContent = 'Unlocked · no watermark this session';
+  } else {
+    statusBadge.className = 'status-badge locked';
+    statusText.textContent = 'Free · watermark on export';
+  }
+}
+
+</script>
+</body>
+</html>
